@@ -2,8 +2,8 @@ import { Language } from '../types';
 
 export const languages: Language[] = [
   { code: 'en', name: 'English', flag: '🇺🇸' },
-  { code: 'zh', name: 'Chinese (Simplified)', flag: '🇨🇳' },
-  { code: 'zh-TW', name: 'Chinese (Traditional)', flag: '🇹🇼' },
+  { code: 'zh', name: 'Simplified Chinese', flag: '🇨🇳' },
+  { code: 'zh-TW', name: 'Traditional Chinese', flag: '🇹🇼' },
   { code: 'ja', name: 'Japanese', flag: '🇯🇵' },
   { code: 'ko', name: 'Korean', flag: '🇰🇷' },
   { code: 'es', name: 'Spanish', flag: '🇪🇸' },

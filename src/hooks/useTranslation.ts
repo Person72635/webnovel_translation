@@ -3,11 +3,6 @@ import { TranslationResult } from '../types';
 
 export type TranslationEngine = 'mymemory' | 'deepl' | 'gemini';
 
-interface TranslateTextOptions {
-  source: string;
-  target: string;
-}
-
 export const useTranslation = () => {
   const [isTranslating, setIsTranslating] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -15,12 +10,15 @@ export const useTranslation = () => {
 
   const translateText = useCallback(async (
     text: string,
-    sourceLanguage: string,
-    targetLanguage: string,
+    sourceLang: string,
+    targetLang: string,
     engine: TranslationEngine,
     apiKey?: string,
-    examples?: TranslateTextOptions
+    styleExamples?: { source: string; target: string }
   ): Promise<TranslationResult | null> => {
+    if ((engine === 'deepl' || engine === 'gemini') && !apiKey) {
+      throw new Error('API key is required for this translation engine.');
+    }
     abortControllerRef.current = new AbortController();
     const signal = abortControllerRef.current.signal;
     setIsTranslating(true);
@@ -50,7 +48,7 @@ export const useTranslation = () => {
           let translatedChunk = '';
 
           if (engine === 'mymemory') {
-            const apiUrl = `/api/get?q=${encodeURIComponent(chunk)}&langpair=${sourceLanguage}|${targetLanguage}`;
+            const apiUrl = `/api/get?q=${encodeURIComponent(chunk)}&langpair=${sourceLang}|${targetLang}`;
             const response = await fetch(apiUrl, { signal });
             const data = await response.json();
             if (data.responseStatus !== 200) throw new Error(data.responseDetails || 'MyMemory API error');
@@ -67,7 +65,7 @@ export const useTranslation = () => {
               },
               body: JSON.stringify({
                 text: [chunk],
-                target_lang: targetLanguage.toUpperCase(),
+                target_lang: targetLang.toUpperCase(),
               }),
             });
 
@@ -82,9 +80,9 @@ export const useTranslation = () => {
           } else if (engine === 'gemini') {
             if (!apiKey) throw new Error('Gemini API key is required.');
             const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${apiKey}`;
-                        const prompt = examples && examples.source && examples.target
-              ? `Translate the following text from ${sourceLanguage} to ${targetLanguage}, matching the style of the provided example.\n\n---\nExample Source Text:\n${examples.source}\n\n---\nExample Target Text:\n${examples.target}\n\n---\nText to Translate:\n${chunk}`
-              : `Translate the following text from ${sourceLanguage} to ${targetLanguage}:\n\n${chunk}`;
+            const prompt = styleExamples && styleExamples.source && styleExamples.target
+              ? `Translate the following text from ${sourceLang} to ${targetLang}, matching the style of the provided example.\n\n---\nExample Source Text:\n${styleExamples.source}\n\n---\nExample Target Text:\n${styleExamples.target}\n\n---\nText to Translate:\n${chunk}`
+              : `Translate the following text from ${sourceLang} to ${targetLang}:\n\n${chunk}`;
             const response = await fetch(apiUrl, {
               signal,
               method: 'POST',
@@ -124,8 +122,8 @@ export const useTranslation = () => {
         id: Date.now().toString(),
         originalText: text,
         translatedText,
-        sourceLanguage,
-        targetLanguage,
+        sourceLanguage: sourceLang,
+        targetLanguage: targetLang,
         timestamp: Date.now(),
         characterCount: translatedText.length,
         wordCount: translatedText.trim().split(/\s+/).length,

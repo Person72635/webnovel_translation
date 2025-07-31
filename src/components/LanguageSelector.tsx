@@ -15,13 +15,15 @@ export const LanguageSelector: React.FC<LanguageSelectorProps> = ({
   onSelect,
   label,
 }) => {
-  const selectedLanguage = languages.find(lang => lang.code === selected);
+
 
   return (
     <div className="relative">
-      <label className="block text-sm font-medium text-gray-700 mb-2">
-        {label}
-      </label>
+      {label && (
+        <label className="block text-sm font-medium text-gray-700 mb-2">
+          {label}
+        </label>
+      )}
       <div className="relative">
         <select
           value={selected}

@@ -1,0 +1,15 @@
+I want the language choice buttons to be stacked on each other like a previous iteration instead of side by side.
+Please make minimal changes to the code and refer to the README file
+
+Move the translation engine choice button to under the language choice buttons.
+Also, move the swap translation direction icon to the level of the Target Language text, but right-justified.
+Please make minimal changes to the code and refer to the README file
+
+Change the If Her Flag Breaks tab name to "Styled Translation" and allow the user to select the languages to translate from and to.
+Please make minimal changes to the code and refer to the README file
+
+Modify the Example Source (Chinese) and Example Target (English) to update according to the source and target languages chosen
+Please make minimal changes to the code and refer to the README file
+
+Change the Flag Breaks variable names to Styled
+Please make minimal changes to the code and refer to the README file
