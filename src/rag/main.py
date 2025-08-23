@@ -5,6 +5,9 @@ from pipeline import run_rag_translation
 from dotenv import load_dotenv
 import os
 
+from rag_retriever import RAGRetriever
+from prompt_manager import PromptManager
+
 def main(query_text, mode='balanced'):
     """Main function to run the RAG translation pipeline from the command line."""
     load_dotenv()
@@ -14,7 +17,12 @@ def main(query_text, mode='balanced'):
         print("Please set the environment variable and try again.")
         return
 
-    run_rag_translation(query_text, mode, api_key)
+    # Initialize components once
+    print("Loading RAGRetriever...")
+    retriever = RAGRetriever()
+    print("Loading PromptManager...")
+    prompt_manager = PromptManager()
+    run_rag_translation(query_text, mode, api_key, retriever, prompt_manager)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Translate Chinese text using a RAG pipeline.")

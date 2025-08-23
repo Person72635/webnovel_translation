@@ -1,4 +1,5 @@
 import { useState, useCallback, useRef } from 'react';
+import axios from 'axios';
 import { TranslationResult } from '../types';
 
 export type TranslationEngine = 'mymemory' | 'deepl' | 'gemini' | 'rag_gemini';
@@ -162,7 +163,13 @@ export const useTranslation = () => {
         console.log('Translation canceled by user.');
         return null;
       } else {
-        console.error('Translation failed:', error);
+        if (axios.isAxiosError(error)) {
+          console.error('Translation failed:', error.response?.data || error.message);
+        } else if (error instanceof Error) {
+          console.error('Translation failed:', error.message);
+        } else {
+          console.error('Translation failed:', String(error));
+        }
         return null;
       }
     } finally {

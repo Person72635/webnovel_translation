@@ -1,9 +1,29 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+
+from contextlib import asynccontextmanager
+from rag_retriever import RAGRetriever
+from prompt_manager import PromptManager
 from pipeline import run_rag_translation
 
-app = FastAPI()
+# Global objects to hold the initialized models
+ml_models = {}
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Load the ML models
+    print("Loading RAGRetriever...")
+    ml_models["retriever"] = RAGRetriever()
+    print("Loading PromptManager...")
+    ml_models["prompt_manager"] = PromptManager()
+    print("Models loaded.")
+    yield
+    # Clean up the ML models and release the resources
+    ml_models.clear()
+
+app = FastAPI(lifespan=lifespan)
+
 
 # Configure CORS to allow requests from your frontend
 origins = [
@@ -34,7 +54,13 @@ class TranslationRequest(BaseModel):
 def translate_rag_endpoint(request: TranslationRequest):
     """API endpoint to run the RAG translation pipeline."""
     try:
-        translation = run_rag_translation(request.query, request.mode, request.api_key)
+        translation = run_rag_translation(
+            request.query,
+            request.mode,
+            request.api_key,
+            retriever=ml_models["retriever"],
+            prompt_manager=ml_models["prompt_manager"]
+        )
         return {"translation": translation}
     except Exception as e:
         return {"error": str(e)}
@@ -42,4 +68,4 @@ def translate_rag_endpoint(request: TranslationRequest):
 if __name__ == "__main__":
     import uvicorn
     print("Starting FastAPI server...")
-    uvicorn.run(app, host="127.0.0.1", port=8000)
+    uvicorn.run(app, host="localhost", port=8000)

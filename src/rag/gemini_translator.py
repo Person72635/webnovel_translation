@@ -9,7 +9,7 @@ class GeminiTranslator:
             raise ValueError("Gemini API key not provided. Please provide it in the UI or set the GEMINI_API_KEY environment variable.")
         
         genai.configure(api_key=self.api_key)
-        self.model = genai.GenerativeModel('gemini-pro')
+        self.model = genai.GenerativeModel('gemini-1.5-flash')
         print("[SUCCESS] Gemini Translator initialized.")
 
     def translate(self, prompt):
