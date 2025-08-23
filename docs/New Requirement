@@ -1,8 +1,14 @@
-Make a new tab called If Her Flag Breaks that is basically the same as the Styled Translation tab.
-Key differences:
-Source language is always Simplified Chinese
-Target language is always English
-Example Source is always Flags 0-6 Chinese.txt
-Example Target is always Flags 0-6 English.txt
-Thus there is no need for users to select languages or upload example files
-Please make minimal changes to the code and refer to the README file
+DO NOT MAKE ANY CHANGES YET
+Create a plan to implement RAG into the If Her Flag Breaks translation.
+Here is a basic outline to expand upoon:
+1. Using chromadb or pgvector (maybe explain the pros and cons of each), create a vector database of the Chinese flag_chunk files.
+    a. There should also be metadata for each file, such as the file name, chapter number, or chunk number.
+    b. The vector database should be created in Python and could probably be stored in flag_chunks so it's easy to access and there's no need to recreate the database.
+2. When a translation query is raised, use the vector database to find the most similar files (like top 3 or something) to the query.
+    a. This requires turning the query into a vector first.
+    b. The only method for finding similarity I know is cosine similarity, but suggest some other methods (native to chromadb/pgvector) that could also work.
+3. Send a three-shot prompt to Gemini using the most similar files as context and the query as the question.
+    a. Each shot is an example translation consisting of the similar Chinese file and the corresponding English one.
+    b. The query should involve asking Gemini to translate the text given by the user in the style of the context examples provided above.
+    c. Gemini should return just the translation without any commentary.
+AGAIN, DO NOT MAKE ANY CHANGES YET, JUST PROPOSE A PLAN

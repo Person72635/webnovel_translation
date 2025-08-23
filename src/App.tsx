@@ -41,6 +41,7 @@ function App() {
   const [ifHerFlagBreaksCopied, setIfHerFlagBreaksCopied] = useState(false);
   const [flagBreaksExampleSource, setFlagBreaksExampleSource] = useState('');
   const [flagBreaksExampleTarget, setFlagBreaksExampleTarget] = useState('');
+  const [ragMode, setRagMode] = useState<'cost_saver' | 'balanced' | 'quality'>('balanced');
 
   const { translateText, isTranslating, progress, cancelTranslation } = useTranslation();
 
@@ -179,7 +180,7 @@ function App() {
     }
   }, [styledResult]);
 
-  const handleIfHerFlagBreaks = useCallback(async () => {
+  const handleIfHerFlagBreaks = async () => {
     if (!ifHerFlagBreaksInput.trim() || !flagBreaksExampleSource || !flagBreaksExampleTarget) return;
 
     try {
@@ -187,9 +188,10 @@ function App() {
         ifHerFlagBreaksInput,
         'zh',
         'en',
-        'gemini',
+        'rag_gemini',
         apiKey,
-        { source: flagBreaksExampleSource, target: flagBreaksExampleTarget }
+        undefined, // No style examples for RAG
+        ragMode
       );
       if (result) {
         setIfHerFlagBreaksResult(result);
@@ -200,7 +202,7 @@ function App() {
         setToast({ message: (error as Error).message, type: 'error' });
       }
     }
-  }, [ifHerFlagBreaksInput, flagBreaksExampleSource, flagBreaksExampleTarget, apiKey, translateText]);
+  };
 
   const handleIfHerFlagBreaksCopy = useCallback(() => {
     if (ifHerFlagBreaksResult) {
@@ -533,17 +535,32 @@ function App() {
               <h2 className="text-xl font-bold mb-4">If Her Flag Breaks</h2>
               <p className="text-gray-600 mb-6">Translate If Her Flag Breaks using Person72635's translations as examples.</p>
 
-              <div className="mb-6">
-                <label htmlFor="gemini-api-key-if-her-flag-breaks" className="block text-sm font-medium text-gray-800 mb-1">Gemini API Key</label>
+              <div className="mb-4">
+                <label htmlFor="gemini-api-key-flag-breaks" className="block text-sm font-medium text-gray-800 mb-1">Gemini API Key</label>
                 <input
                   type="password"
-                  id="gemini-api-key-if-her-flag-breaks"
+                  id="gemini-api-key-flag-breaks"
                   value={apiKey}
                   onChange={(e) => setApiKey(e.target.value)}
                   className="shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-lg p-2.5 bg-gray-50"
                   placeholder="Enter your Gemini API Key"
                 />
                 <p className="text-xs text-gray-500 mt-2">You can get a free API key from <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">Google AI Studio</a>.</p>
+              </div>
+
+              <div className="mb-6">
+                <label htmlFor="rag-mode-select" className="block text-sm font-medium text-gray-800 mb-1">RAG Mode</label>
+                <select
+                  id="rag-mode-select"
+                  value={ragMode}
+                  onChange={(e) => setRagMode(e.target.value as 'cost_saver' | 'balanced' | 'quality')}
+                  className="shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-lg p-2.5 bg-gray-50"
+                >
+                  <option value="cost_saver">Cost-Saver</option>
+                  <option value="balanced">Balanced</option>
+                  <option value="quality">Highest Quality</option>
+                </select>
+                <p className="text-xs text-gray-500 mt-2">Select the retrieval strategy for the RAG pipeline.</p>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-8">

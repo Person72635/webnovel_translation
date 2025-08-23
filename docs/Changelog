@@ -13,3 +13,12 @@ Please make minimal changes to the code and refer to the README file
 
 Change the Flag Breaks variable names to Styled
 Please make minimal changes to the code and refer to the README file
+
+Make a new tab called If Her Flag Breaks that is basically the same as the Styled Translation tab.
+Key differences:
+Source language is always Simplified Chinese
+Target language is always English
+Example Source is always Flags 0-6 Chinese.txt
+Example Target is always Flags 0-6 English.txt
+Thus there is no need for users to select languages or upload example files
+Please make minimal changes to the code and refer to the README file

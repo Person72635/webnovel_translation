@@ -1,7 +1,7 @@
 import { useState, useCallback, useRef } from 'react';
 import { TranslationResult } from '../types';
 
-export type TranslationEngine = 'mymemory' | 'deepl' | 'gemini';
+export type TranslationEngine = 'mymemory' | 'deepl' | 'gemini' | 'rag_gemini';
 
 export const useTranslation = () => {
   const [isTranslating, setIsTranslating] = useState(false);
@@ -14,7 +14,8 @@ export const useTranslation = () => {
     targetLang: string,
     engine: TranslationEngine,
     apiKey?: string,
-    styleExamples?: { source: string; target: string }
+    styleExamples?: { source: string; target: string },
+    ragMode?: 'cost_saver' | 'balanced' | 'quality'
   ): Promise<TranslationResult | null> => {
     if ((engine === 'deepl' || engine === 'gemini') && !apiKey) {
       throw new Error('API key is required for this translation engine.');
@@ -77,6 +78,32 @@ export const useTranslation = () => {
 
             const data = await response.json();
             translatedChunk = data.translations[0].text;
+          } else if (engine === 'rag_gemini') {
+            if (!apiKey) throw new Error('Gemini API key is required for RAG translation.');
+            const apiUrl = 'http://127.0.0.1:8000/api/translate-rag';
+            const response = await fetch(apiUrl, {
+              signal,
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                query: chunk,
+                mode: ragMode || 'balanced',
+                api_key: apiKey,
+              }),
+            });
+
+            if (!response.ok) {
+              const errorBody = await response.text();
+              console.error(`[RAG] API Error: ${response.status}`, errorBody);
+              throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
+            const data = await response.json();
+            if (data.error) throw new Error(data.error);
+            translatedChunk = data.translation;
+
           } else if (engine === 'gemini') {
             if (!apiKey) throw new Error('Gemini API key is required.');
             const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${apiKey}`;

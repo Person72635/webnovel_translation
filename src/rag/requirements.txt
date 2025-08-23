@@ -1,0 +1,12 @@
+--index-url https://download.pytorch.org/whl/cpu
+
+chromadb
+sentence-transformers
+torch
+torchvision
+torchaudio
+tqdm
+google-generativeai
+fastapi
+uvicorn[standard]
+python-dotenv
