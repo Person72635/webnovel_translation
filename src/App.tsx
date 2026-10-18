@@ -39,35 +39,11 @@ function App() {
   const [ifHerFlagBreaksInput, setIfHerFlagBreaksInput] = useState('');
   const [ifHerFlagBreaksResult, setIfHerFlagBreaksResult] = useState<TranslationResult | null>(null);
   const [ifHerFlagBreaksCopied, setIfHerFlagBreaksCopied] = useState(false);
-  const [flagBreaksExampleSource, setFlagBreaksExampleSource] = useState('');
-  const [flagBreaksExampleTarget, setFlagBreaksExampleTarget] = useState('');
-  const [ragMode, setRagMode] = useState<'cost_saver' | 'balanced' | 'quality'>('balanced');
+  const [ragMode] = useState<'balanced'>('balanced');
 
   const { translateText, isTranslating, progress, cancelTranslation } = useTranslation();
 
-  useEffect(() => {
-    const fetchExampleFiles = async () => {
-      try {
-        const sourceResponse = await fetch('/assets/Flags 0-6 Chinese.txt');
-        const targetResponse = await fetch('/assets/Flags 0-6 English.txt');
-        
-        if (!sourceResponse.ok || !targetResponse.ok) {
-          throw new Error('Failed to fetch example files');
-        }
 
-        const sourceText = await sourceResponse.text();
-        const targetText = await targetResponse.text();
-
-        setFlagBreaksExampleSource(sourceText);
-        setFlagBreaksExampleTarget(targetText);
-      } catch (error) {
-        console.error('Error fetching example files:', error);
-        setToast({ message: 'Could not load style examples.', type: 'error' });
-      }
-    };
-
-    fetchExampleFiles();
-  }, []);
 
   const styledSourceLanguageName = languages.find(lang => lang.code === styledSourceLanguage)?.name;
   const styledTargetLanguageName = languages.find(lang => lang.code === styledTargetLanguage)?.name;
@@ -181,7 +157,7 @@ function App() {
   }, [styledResult]);
 
   const handleIfHerFlagBreaks = async () => {
-    if (!ifHerFlagBreaksInput.trim() || !flagBreaksExampleSource || !flagBreaksExampleTarget) return;
+    if (!ifHerFlagBreaksInput.trim()) return;
 
     try {
       const result = await translateText(
@@ -533,35 +509,7 @@ function App() {
           <div className="space-y-6">
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
               <h2 className="text-xl font-bold mb-4">If Her Flag Breaks</h2>
-              <p className="text-gray-600 mb-6">Translate If Her Flag Breaks using Person72635's translations as examples.</p>
-
-              <div className="mb-4">
-                <label htmlFor="gemini-api-key-flag-breaks" className="block text-sm font-medium text-gray-800 mb-1">Gemini API Key</label>
-                <input
-                  type="password"
-                  id="gemini-api-key-flag-breaks"
-                  value={apiKey}
-                  onChange={(e) => setApiKey(e.target.value)}
-                  className="shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-lg p-2.5 bg-gray-50"
-                  placeholder="Enter your Gemini API Key"
-                />
-                <p className="text-xs text-gray-500 mt-2">You can get a free API key from <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">Google AI Studio</a>.</p>
-              </div>
-
-              <div className="mb-6">
-                <label htmlFor="rag-mode-select" className="block text-sm font-medium text-gray-800 mb-1">RAG Mode</label>
-                <select
-                  id="rag-mode-select"
-                  value={ragMode}
-                  onChange={(e) => setRagMode(e.target.value as 'cost_saver' | 'balanced' | 'quality')}
-                  className="shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-lg p-2.5 bg-gray-50"
-                >
-                  <option value="cost_saver">Cost-Saver</option>
-                  <option value="balanced">Balanced</option>
-                  <option value="quality">Highest Quality</option>
-                </select>
-                <p className="text-xs text-gray-500 mt-2">Select the retrieval strategy for the RAG pipeline.</p>
-              </div>
+              <p className="text-gray-600 mb-6">Translate If Her Flag Breaks using Person72635's translations as examples through RAG (Retrieval-Augmented Generation).</p>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                 <div>
@@ -589,7 +537,7 @@ function App() {
             <div className="flex justify-end">
               <button 
                 onClick={handleIfHerFlagBreaks}
-                disabled={!ifHerFlagBreaksInput.trim() || !flagBreaksExampleSource || !flagBreaksExampleTarget || isTranslating}
+                disabled={!ifHerFlagBreaksInput.trim() || isTranslating}
                 className={`flex items-center justify-center px-6 py-3 border border-transparent text-base font-medium rounded-lg shadow-sm text-white ${isTranslating ? 'bg-yellow-500' : 'bg-blue-600 hover:bg-blue-700'} focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors duration-200`}
               >
                 {isTranslating ? (
