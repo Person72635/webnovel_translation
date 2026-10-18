@@ -81,7 +81,7 @@ export const useTranslation = () => {
             translatedChunk = data.translations[0].text;
           } else if (engine === 'rag_gemini') {
             if (!apiKey) throw new Error('Gemini API key is required for RAG translation.');
-            const apiUrl = 'http://127.0.0.1:8000/api/translate-rag';
+            const apiUrl = '/api/translate-rag';
             const response = await fetch(apiUrl, {
               signal,
               method: 'POST',
