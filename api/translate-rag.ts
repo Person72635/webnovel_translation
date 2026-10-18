@@ -1,9 +1,9 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { pipeline } from '@xenova/transformers';
 import { Pool } from 'pg';
 
 // --- Configuration ---
-const EMBEDDING_MODEL = 'Xenova/multilingual-e5-large';
+const HF_MODEL = 'intfloat/multilingual-e5-large';
+const HF_API_URL = `https://api-inference.huggingface.co/models/${HF_MODEL}`;
 const CHUNK_SIZE = 5; // Number of paragraphs per chunk (matches database seeding)
 const CONTEXT_WINDOW_SIZE = 2; // Number of previous chunks to include for context
 const PROMPT_TEMPLATE = `
@@ -26,10 +26,14 @@ if (!process.env.POSTGRES_URL) {
 }
 const pool = new Pool({ connectionString: process.env.POSTGRES_URL });
 
-// Initialize Gemini API key
+// Initialize API keys
+if (!process.env.HF_API_KEY) {
+  throw new Error('HF_API_KEY environment variable is not set.');
+}
 if (!process.env.GEMINI_API_KEY) {
   throw new Error('GEMINI_API_KEY environment variable is not set.');
 }
+const HF_API_KEY = process.env.HF_API_KEY;
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 
 interface DocumentRow {
@@ -58,6 +62,27 @@ const chunkByParagraphs = (text: string): string[] => {
   }
 
   return chunks;
+};
+
+// Function to generate embedding using Hugging Face Inference API
+const generateEmbedding = async (text: string): Promise<number[]> => {
+  const response = await fetch(HF_API_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${HF_API_KEY}`,
+    },
+    body: JSON.stringify({ inputs: text }),
+  });
+
+  if (!response.ok) {
+    const errorBody = await response.text();
+    throw new Error(`Hugging Face API error: ${response.status} - ${errorBody}`);
+  }
+
+  const data = await response.json();
+  // HF returns embeddings as a single vector or array of vectors
+  return Array.isArray(data[0]) ? data[0] : data;
 };
 
 // Function to get relevant context from the database
@@ -102,12 +127,7 @@ export default async (req: VercelRequest, res: VercelResponse) => {
       return res.status(400).json({ error: 'No valid text to translate.' });
     }
 
-    // 2. Load embedding model once
-    console.log('Loading embedding model...');
-    const extractor = await pipeline('feature-extraction', EMBEDDING_MODEL, { quantized: true });
-    console.log('Embedding model loaded.');
-
-    // 3. Process each chunk with context window
+    // 2. Process each chunk with context window
     const translations: string[] = [];
     const contextWindow: string[] = [];
 
@@ -115,9 +135,8 @@ export default async (req: VercelRequest, res: VercelResponse) => {
       const chunk = inputChunks[i];
       console.log(`Processing chunk ${i + 1}/${inputChunks.length}...`);
 
-      // Generate embedding for this chunk
-      const chunkEmbedding = await extractor(chunk, { pooling: 'mean', normalize: true });
-      const vector = Array.from(chunkEmbedding.data) as number[];
+      // Generate embedding for this chunk using Hugging Face
+      const vector = await generateEmbedding(chunk);
 
       // Retrieve corpus context
       const corpusContext = await getContext(vector, mode);

@@ -39,3 +39,17 @@ Here is a basic outline to expand upoon:
 AGAIN, DO NOT MAKE ANY CHANGES YET, JUST PROPOSE A PLAN
 
 Update the README file to include the most up-to-date information about the project, including the RAG and any other new implementations
+
+Currently, the RAG implementation requires a local Python backend to be running.
+However, I want to host the website on Vercel, which uses Node.js, as the rest of the project attests to.
+Could we set up an identical RAG implementation that doesn't need a local backend? I believe using pgvector would work for this.
+As always, please make minimal changes to the code and refer to the README file for information about the project.
+
+Set up seeding to populate the Neon Postgres database with the flag chunk files, each entry should have the following fields:
+- id: the id of the entry
+- chinese_text: the chinese text of the entry
+- english_text: the english text of the entry
+- embedding: the embedding of the entry
+Each entry should be a chunk of 5 paragraphs from the flag chunk files.
+
+Audit the current RAG implementation and make sure it's working as expected.

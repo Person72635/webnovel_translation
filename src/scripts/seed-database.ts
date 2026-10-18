@@ -1,4 +1,3 @@
-import { pipeline } from '@xenova/transformers';
 import { Pool } from 'pg';
 import path from 'path';
 import * as fs from 'fs/promises';
@@ -6,17 +5,22 @@ import { Dirent } from 'fs';
 
 // --- Configuration ---
 const FLAG_CHUNKS_PATH = path.join(process.cwd(), 'public', 'assets', 'flag_chunks');
-const EMBEDDING_MODEL = 'Xenova/multilingual-e5-large';
+const HF_MODEL = 'intfloat/multilingual-e5-large';
+const HF_API_URL = `https://api-inference.huggingface.co/models/${HF_MODEL}`;
 const CHUNK_SIZE = 5; // Number of paragraphs per database chunk
 
 // Simple environment variable check
 if (!process.env.POSTGRES_URL) {
   throw new Error('POSTGRES_URL environment variable is not set.');
 }
+if (!process.env.HF_API_KEY) {
+  throw new Error('HF_API_KEY environment variable is not set.');
+}
 
 const pool = new Pool({
   connectionString: process.env.POSTGRES_URL,
 });
+const HF_API_KEY = process.env.HF_API_KEY;
 
 const getPairedFiles = async (chunkDir: string): Promise<[string | null, string | null]> => {
   let chineseFile: string | null = null;
@@ -58,6 +62,27 @@ const createAlignedChunks = async (chinesePath: string, englishPath: string, fla
     });
   }
   return alignedChunks;
+};
+
+// Function to generate embedding using Hugging Face Inference API
+const generateEmbedding = async (text: string): Promise<number[]> => {
+  const response = await fetch(HF_API_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${HF_API_KEY}`,
+    },
+    body: JSON.stringify({ inputs: text }),
+  });
+
+  if (!response.ok) {
+    const errorBody = await response.text();
+    throw new Error(`Hugging Face API error: ${response.status} - ${errorBody}`);
+  }
+
+  const data = await response.json();
+  // HF returns embeddings as a single vector or array of vectors
+  return Array.isArray(data[0]) ? data[0] : data;
 };
 
 const main = async () => {
@@ -112,18 +137,13 @@ const main = async () => {
         return;
     }
 
-    console.log('Loading embedding model... (This may take a while)');
-    const extractor = await pipeline('feature-extraction', EMBEDDING_MODEL, { quantized: true });
-    console.log('Embedding model loaded.');
-
     console.log('Generating and inserting embeddings...');
     for (const chunk of allAlignedChunks) {
-      const embedding = await extractor(chunk.source_chinese_text, { pooling: 'mean', normalize: true });
-      const vector = Array.from(embedding.data);
+      const embedding = await generateEmbedding(chunk.source_chinese_text);
 
       await client.query(
         'INSERT INTO gaworare (id, chinese_text, english_text, embedding) VALUES ($1, $2, $3, $4)',
-        [chunk.id, chunk.source_chinese_text, chunk.target_english_text, `[${vector.join(',')}]`]
+        [chunk.id, chunk.source_chinese_text, chunk.target_english_text, `[${embedding.join(',')}]`]
       );
       console.log(`Inserted chunk ${chunk.id}`);
     }
