@@ -80,7 +80,6 @@ export const useTranslation = () => {
             const data = await response.json();
             translatedChunk = data.translations[0].text;
           } else if (engine === 'rag_gemini') {
-            if (!apiKey) throw new Error('Gemini API key is required for RAG translation.');
             const apiUrl = '/api/translate-rag';
             const response = await fetch(apiUrl, {
               signal,
@@ -91,7 +90,6 @@ export const useTranslation = () => {
               body: JSON.stringify({
                 query: chunk,
                 mode: ragMode || 'balanced',
-                api_key: apiKey,
               }),
             });
 

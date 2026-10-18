@@ -4,6 +4,7 @@ import { Pool } from 'pg';
 
 // --- Configuration ---
 const EMBEDDING_MODEL = 'Xenova/multilingual-e5-large';
+const CHUNK_SIZE = 5; // Number of paragraphs per chunk (matches database seeding)
 const CONTEXT_WINDOW_SIZE = 2; // Number of previous chunks to include for context
 const PROMPT_TEMPLATE = `
 Given the following context chunks and recent translations, translate the current text into English with a similar style.
@@ -25,6 +26,12 @@ if (!process.env.POSTGRES_URL) {
 }
 const pool = new Pool({ connectionString: process.env.POSTGRES_URL });
 
+// Initialize Gemini API key
+if (!process.env.GEMINI_API_KEY) {
+  throw new Error('GEMINI_API_KEY environment variable is not set.');
+}
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+
 interface DocumentRow {
   chinese_text: string;
   english_text: string;
@@ -40,10 +47,17 @@ interface GeminiResponse {
   }[];
 }
 
-// Function to chunk text by paragraphs
+// Function to chunk text by paragraphs (groups of 5)
 const chunkByParagraphs = (text: string): string[] => {
   const paragraphs = text.split('\n\n').map(p => p.trim()).filter(p => p);
-  return paragraphs;
+  const chunks: string[] = [];
+
+  for (let i = 0; i < paragraphs.length; i += CHUNK_SIZE) {
+    const chunk = paragraphs.slice(i, i + CHUNK_SIZE).join('\n\n');
+    chunks.push(chunk);
+  }
+
+  return chunks;
 };
 
 // Function to get relevant context from the database
@@ -71,18 +85,18 @@ export default async (req: VercelRequest, res: VercelResponse) => {
     return res.status(405).json({ error: 'Method Not Allowed' });
   }
 
-  const { query, mode = 'balanced', api_key: apiKey } = req.body;
+  const { query, mode = 'balanced' } = req.body;
 
-  if (!query || !apiKey) {
-    return res.status(400).json({ error: 'Missing required parameters: query and api_key.' });
+  if (!query) {
+    return res.status(400).json({ error: 'Missing required parameter: query.' });
   }
 
   try {
     console.log('Starting translation process...');
 
-    // 1. Chunk the input by paragraphs
+    // 1. Chunk the input by paragraphs (groups of 5)
     const inputChunks = chunkByParagraphs(query);
-    console.log(`Input split into ${inputChunks.length} paragraphs.`);
+    console.log(`Input split into ${inputChunks.length} chunks of ${CHUNK_SIZE} paragraphs each.`);
 
     if (inputChunks.length === 0) {
       return res.status(400).json({ error: 'No valid text to translate.' });
@@ -118,10 +132,13 @@ export default async (req: VercelRequest, res: VercelResponse) => {
         .replace('{current_text}', chunk);
 
       // Call Gemini API
-      const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${apiKey}`;
+      const geminiUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent';
       const geminiRes = await fetch(geminiUrl, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'x-goog-api-key': GEMINI_API_KEY,
+        },
         body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }),
       });
 
