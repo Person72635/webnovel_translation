@@ -30,12 +30,41 @@ export const useTranslation = () => {
     const originalLines = text.split('\n');
     const structuredChunks: string[][] = [];
 
-    for (const line of originalLines) {
-      if (line.length === 0) {
-        structuredChunks.push(['']);
-      } else {
-        const subChunks = line.match(new RegExp(`.{1,${CHUNK_SIZE}}`, 'g')) || [];
-        structuredChunks.push(subChunks);
+    // For RAG mode, chunk by paragraphs (max 100 paragraphs or ~20k chars, whichever comes first)
+    if (engine === 'rag_gemini') {
+      const paragraphs = text.replace(/\r\n/g, '\n').split(/\n\s*\n/).map(p => p.trim()).filter(p => p);
+      const PARAGRAPHS_PER_CHUNK = 100;
+      const MAX_CHARS_PER_CHUNK = 20000;
+      
+      let currentChunk: string[] = [];
+      let currentLength = 0;
+      
+      for (const para of paragraphs) {
+        const paraLength = para.length + 2; // +2 for \n\n separator
+        
+        // If adding this paragraph would exceed limits, start new chunk
+        if ((currentChunk.length >= PARAGRAPHS_PER_CHUNK || currentLength + paraLength > MAX_CHARS_PER_CHUNK) && currentChunk.length > 0) {
+          structuredChunks.push([currentChunk.join('\n\n')]);
+          currentChunk = [];
+          currentLength = 0;
+        }
+        
+        currentChunk.push(para);
+        currentLength += paraLength;
+      }
+      
+      // Push remaining chunk
+      if (currentChunk.length > 0) {
+        structuredChunks.push([currentChunk.join('\n\n')]);
+      }
+    } else {
+      for (const line of originalLines) {
+        if (line.length === 0) {
+          structuredChunks.push(['']);
+        } else {
+          const subChunks = line.match(new RegExp(`.{1,${CHUNK_SIZE}}`, 'g')) || [];
+          structuredChunks.push(subChunks);
+        }
       }
     }
 
@@ -141,7 +170,7 @@ export const useTranslation = () => {
         return translatedLineParts.join('');
       });
 
-      const translatedText = translatedLines.join('\n');
+      const translatedText = engine === 'rag_gemini' ? translatedLines.join('\n\n') : translatedLines.join('\n');
       setProgress(100);
 
       const result: TranslationResult = {

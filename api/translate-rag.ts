@@ -2,8 +2,8 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { Pool } from 'pg';
 
 // --- Configuration ---
-const HF_MODEL = 'intfloat/multilingual-e5-large';
-const HF_API_URL = `https://api-inference.huggingface.co/models/${HF_MODEL}`;
+const GEMINI_MODEL = 'gemini-embedding-001';
+const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:embedContent`;
 const CHUNK_SIZE = 5; // Number of paragraphs per chunk (matches database seeding)
 const CONTEXT_WINDOW_SIZE = 2; // Number of previous chunks to include for context
 const PROMPT_TEMPLATE = `
@@ -27,13 +27,9 @@ if (!process.env.POSTGRES_URL) {
 const pool = new Pool({ connectionString: process.env.POSTGRES_URL });
 
 // Initialize API keys
-if (!process.env.HF_API_KEY) {
-  throw new Error('HF_API_KEY environment variable is not set.');
-}
 if (!process.env.GEMINI_API_KEY) {
   throw new Error('GEMINI_API_KEY environment variable is not set.');
 }
-const HF_API_KEY = process.env.HF_API_KEY;
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 
 interface DocumentRow {
@@ -51,38 +47,63 @@ interface GeminiResponse {
   }[];
 }
 
-// Function to chunk text by paragraphs (groups of 5)
+// Function to chunk text by paragraphs (max 5 paragraphs or ~5000 chars, always breaks at paragraph boundary)
 const chunkByParagraphs = (text: string): string[] => {
-  const paragraphs = text.split('\n\n').map(p => p.trim()).filter(p => p);
+  // Normalize line endings and split on lines that contain only whitespace or are empty
+  const paragraphs = text.replace(/\r\n/g, '\n').split(/\n\s*\n/).map(p => p.trim()).filter(p => p);
   const chunks: string[] = [];
+  const PARAGRAPHS_PER_CHUNK = 5;
+  const MAX_CHARS_PER_CHUNK = 5000;
 
-  for (let i = 0; i < paragraphs.length; i += CHUNK_SIZE) {
-    const chunk = paragraphs.slice(i, i + CHUNK_SIZE).join('\n\n');
-    chunks.push(chunk);
+  let currentChunk: string[] = [];
+  let currentLength = 0;
+
+  for (const para of paragraphs) {
+    const paraLength = para.length + 2; // +2 for \n\n separator
+
+    // If adding this paragraph would exceed limits, start new chunk
+    if ((currentChunk.length >= PARAGRAPHS_PER_CHUNK || currentLength + paraLength > MAX_CHARS_PER_CHUNK) && currentChunk.length > 0) {
+      chunks.push(currentChunk.join('\n\n'));
+      currentChunk = [];
+      currentLength = 0;
+    }
+
+    currentChunk.push(para);
+    currentLength += paraLength;
+  }
+
+  // Push remaining chunk
+  if (currentChunk.length > 0) {
+    chunks.push(currentChunk.join('\n\n'));
   }
 
   return chunks;
 };
 
-// Function to generate embedding using Hugging Face Inference API
+// Function to generate embedding using Gemini API
 const generateEmbedding = async (text: string): Promise<number[]> => {
-  const response = await fetch(HF_API_URL, {
+  const response = await fetch(`${GEMINI_API_URL}?key=${GEMINI_API_KEY}`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${HF_API_KEY}`,
     },
-    body: JSON.stringify({ inputs: text }),
+    body: JSON.stringify({
+      model: `models/${GEMINI_MODEL}`,
+      content: {
+        parts: [{
+          text: text,
+        }],
+      },
+    }),
   });
 
   if (!response.ok) {
     const errorBody = await response.text();
-    throw new Error(`Hugging Face API error: ${response.status} - ${errorBody}`);
+    throw new Error(`Gemini API error: ${response.status} - ${errorBody}`);
   }
 
   const data = await response.json();
-  // HF returns embeddings as a single vector or array of vectors
-  return Array.isArray(data[0]) ? data[0] : data;
+  return data.embedding.values;
 };
 
 // Function to get relevant context from the database

@@ -5,15 +5,15 @@ import * as fs from 'fs/promises';
 
 // --- Configuration ---
 const FLAG_CHUNKS_PATH = path.join(process.cwd(), 'public', 'assets', 'flag_chunks');
-const HF_MODEL = 'intfloat/multilingual-e5-large';
-const HF_API_URL = `https://api-inference.huggingface.co/models/${HF_MODEL}`;
+const GEMINI_MODEL = 'gemini-embedding-001';
+const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:embedContent`;
 const CHUNK_SIZE = 5; // Number of paragraphs per database chunk
 
-// Initialize HF API key
-if (!process.env.HF_API_KEY) {
-  throw new Error('HF_API_KEY environment variable is not set.');
+// Initialize Gemini API key
+if (!process.env.GEMINI_API_KEY) {
+  throw new Error('GEMINI_API_KEY environment variable is not set.');
 }
-const HF_API_KEY = process.env.HF_API_KEY;
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 
 // Initialize DB connection
 if (!process.env.POSTGRES_URL) {
@@ -35,7 +35,7 @@ const getPairedFiles = async (chunkDir: string): Promise<[string | null, string 
   return [chineseFile, englishFile];
 };
 
-const createAlignedChunks = async (chinesePath: string, englishPath: string, flagName: string, bookNumber: number) => {
+const createAlignedChunks = async (chinesePath: string, englishPath: string, flagName: string, volNumber: number) => {
   const chineseText = await fs.readFile(chinesePath, 'utf-8');
   const englishText = await fs.readFile(englishPath, 'utf-8');
 
@@ -43,7 +43,7 @@ const createAlignedChunks = async (chinesePath: string, englishPath: string, fla
   const englishParas = englishText.split('\n\n').map((p: string) => p.trim()).filter((p: string) => p);
 
   if (chineseParas.length !== englishParas.length) {
-    console.warn(`[WARNING] Mismatch in paragraph count for Book ${bookNumber}, Flag ${flagName}`);
+    console.warn(`[WARNING] Mismatch in paragraph count for vol ${volNumber}, Flag ${flagName}`);
   }
 
   const alignedChunks: { id: string; source_chinese_text: string; target_english_text: string; }[] = [];
@@ -51,7 +51,7 @@ const createAlignedChunks = async (chinesePath: string, englishPath: string, fla
 
   for (let i = 0; i < numParas; i += CHUNK_SIZE) {
     const chunkIndex = Math.floor(i / CHUNK_SIZE);
-    const chunkId = `book_${bookNumber}_${flagName}_chunk_${chunkIndex}`;
+    const chunkId = `vol_${volNumber}_${flagName}_chunk_${chunkIndex}`;
     const chineseSegment = chineseParas.slice(i, i + CHUNK_SIZE).join('\n\n');
     const englishSegment = englishParas.slice(i, i + CHUNK_SIZE).join('\n\n');
     alignedChunks.push({
@@ -63,25 +63,30 @@ const createAlignedChunks = async (chinesePath: string, englishPath: string, fla
   return alignedChunks;
 };
 
-// Function to generate embedding using Hugging Face Inference API
+// Function to generate embedding using Gemini API
 const generateEmbedding = async (text: string): Promise<number[]> => {
-  const response = await fetch(HF_API_URL, {
+  const response = await fetch(`${GEMINI_API_URL}?key=${GEMINI_API_KEY}`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${HF_API_KEY}`,
     },
-    body: JSON.stringify({ inputs: text }),
+    body: JSON.stringify({
+      model: `models/${GEMINI_MODEL}`,
+      content: {
+        parts: [{
+          text: text,
+        }],
+      },
+    }),
   });
 
   if (!response.ok) {
     const errorBody = await response.text();
-    throw new Error(`Hugging Face API error: ${response.status} - ${errorBody}`);
+    throw new Error(`Gemini API error: ${response.status} - ${errorBody}`);
   }
 
   const data = await response.json();
-  // HF returns embeddings as a single vector or array of vectors
-  return Array.isArray(data[0]) ? data[0] : data;
+  return data.embedding.values;
 };
 
 export default async (req: VercelRequest, res: VercelResponse) => {
@@ -105,20 +110,20 @@ export default async (req: VercelRequest, res: VercelResponse) => {
       await client.query('CREATE EXTENSION IF NOT EXISTS vector');
       console.log('pgvector extension is enabled.');
 
+      // Drop existing table to handle dimension changes
+      await client.query('DROP TABLE IF EXISTS gaworare');
+      console.log('Dropped existing table (if it existed).');
+
       // Create table
       await client.query(`
         CREATE TABLE IF NOT EXISTS gaworare (
           id TEXT PRIMARY KEY,
           chinese_text TEXT,
           english_text TEXT,
-          embedding VECTOR(1024)
+          embedding VECTOR(3072)
         )
       `);
       console.log('Table `gaworare` is ready.');
-
-      // Clear existing documents to avoid duplicates
-      await client.query('DELETE FROM gaworare');
-      console.log('Cleared existing documents from the table.');
 
       const allAlignedChunks: { id: string; source_chinese_text: string; target_english_text: string; }[] = [];
       const flagDirs = (await fs.readdir(FLAG_CHUNKS_PATH))
