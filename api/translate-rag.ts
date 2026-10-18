@@ -6,6 +6,7 @@ const GEMINI_MODEL = 'gemini-embedding-001';
 const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:embedContent`;
 const CHUNK_SIZE = 5; // Number of paragraphs per chunk (matches database seeding)
 const CONTEXT_WINDOW_SIZE = 2; // Number of previous chunks to include for context
+const BLOCKED_CODES = new Set(['safety', 'prohibited_content', 'blocklist', 'jailbreak', 'spii', 'content_blocked']);
 const PROMPT_TEMPLATE = `
 Given the following context chunks and recent translations, translate the current text into English with a similar style.
 
@@ -35,16 +36,6 @@ const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 interface DocumentRow {
   chinese_text: string;
   english_text: string;
-}
-
-interface GeminiResponse {
-  candidates: {
-    content: {
-      parts: {
-        text: string;
-      }[];
-    };
-  }[];
 }
 
 // Function to chunk text by paragraphs (max 5 paragraphs or ~5000 chars, always breaks at paragraph boundary)
@@ -151,6 +142,7 @@ export default async (req: VercelRequest, res: VercelResponse) => {
     // 2. Process each chunk with context window
     const translations: string[] = [];
     const contextWindow: string[] = [];
+    const blockedChunks: number[] = [];
 
     for (let i = 0; i < inputChunks.length; i++) {
       const chunk = inputChunks[i];
@@ -171,25 +163,38 @@ export default async (req: VercelRequest, res: VercelResponse) => {
         .replace('{corpus_context}', corpusContext)
         .replace('{current_text}', chunk);
 
-      // Call Gemini API
-      const geminiUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent';
+      // Call Gemini API using Interactions API
+      const geminiUrl = 'https://generativelanguage.googleapis.com/v1beta/interactions';
       const geminiRes = await fetch(geminiUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'x-goog-api-key': GEMINI_API_KEY,
         },
-        body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }),
+        body: JSON.stringify({
+          model: 'gemini-3.8-flash',
+          input: prompt,
+        }),
       });
 
       if (!geminiRes.ok) {
         const errorBody = await geminiRes.text();
         console.error(`[Gemini] API Error for chunk ${i + 1}: ${geminiRes.status}`, errorBody);
+        let errorCode = '';
+        try { errorCode = JSON.parse(errorBody)?.error?.code ?? ''; } catch {}
+        if (geminiRes.status === 400 && BLOCKED_CODES.has(errorCode)) {
+          console.warn(`Chunk ${i + 1} blocked by Gemini (${errorCode}); inserting placeholder and continuing.`);
+          translations.push(`[Chunk ${i + 1} not translated: blocked by Gemini content policy (${errorCode})]`);
+          blockedChunks.push(i + 1);
+          continue;
+        }
         throw new Error(`Gemini API request failed for chunk ${i + 1} with status ${geminiRes.status}`);
       }
 
-      const geminiData = await geminiRes.json() as GeminiResponse;
-      const translation = geminiData.candidates[0]?.content?.parts[0]?.text.trim() || '';
+      const geminiData = await geminiRes.json();
+      // Interactions API returns steps array with model_output containing content
+      const modelOutput = geminiData.steps?.find((step: any) => step.type === 'model_output');
+      const translation = modelOutput?.content?.[0]?.text?.trim() || '';
 
       if (!translation) {
         console.warn(`Chunk ${i + 1} returned empty translation.`);
@@ -204,7 +209,7 @@ export default async (req: VercelRequest, res: VercelResponse) => {
     const finalTranslation = translations.join('\n\n');
     console.log('All chunks translated and combined.');
 
-    return res.status(200).json({ translation: finalTranslation });
+    return res.status(200).json({ translation: finalTranslation, blockedChunks });
 
   } catch (error) {
     console.error('An error occurred in the translation process:', error);

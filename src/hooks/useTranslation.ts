@@ -134,7 +134,7 @@ export const useTranslation = () => {
 
           } else if (engine === 'gemini') {
             if (!apiKey) throw new Error('Gemini API key is required.');
-            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${apiKey}`;
+            const apiUrl = 'https://generativelanguage.googleapis.com/v1beta/interactions';
             const prompt = styleExamples && styleExamples.source && styleExamples.target
               ? `Translate the following text from ${sourceLang} to ${targetLang}, matching the style of the provided example.\n\n---\nExample Source Text:\n${styleExamples.source}\n\n---\nExample Target Text:\n${styleExamples.target}\n\n---\nText to Translate:\n${chunk}`
               : `Translate the following text from ${sourceLang} to ${targetLang}:\n\n${chunk}`;
@@ -143,9 +143,11 @@ export const useTranslation = () => {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
+                'x-goog-api-key': apiKey,
               },
               body: JSON.stringify({
-                contents: [{ parts: [{ text: prompt }] }],
+                model: 'gemini-3.8-flash',
+                input: prompt,
               }),
             });
 
@@ -156,7 +158,8 @@ export const useTranslation = () => {
             }
 
             const data = await response.json();
-            translatedChunk = data.candidates[0].content.parts[0].text.trim();
+            const modelOutput = data.steps?.find((step: any) => step.type === 'model_output');
+            translatedChunk = modelOutput?.content?.[0]?.text?.trim() || '';
           }
           
           setProgress(Math.round(((index + 1) / allApiChunks.length) * 95));
