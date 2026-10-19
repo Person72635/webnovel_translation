@@ -26,3 +26,7 @@ dist-ssr
 
 .vercel
 .env*
+
+public/assets/
+__pycache__/
+*.pyc
